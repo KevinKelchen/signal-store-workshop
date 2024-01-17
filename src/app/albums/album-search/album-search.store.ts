@@ -2,22 +2,21 @@ import { computed, inject } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { filter, pipe, tap } from 'rxjs';
 import {
-  patchState,
   signalStore,
   withComputed,
   withHooks,
   withMethods,
-  withState,
 } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
-import { SortOrder } from '@/shared/models/sort-order.model';
+import { toSortOrder } from '@/shared/models/sort-order.model';
+import { withQueryParams } from '@/shared/state/route/query-params.feature';
 import { searchAlbums, sortAlbums } from '@/albums/album.model';
 import { AlbumsStore } from '@/albums/albums.store';
 
 export const AlbumSearchStore = signalStore(
-  withState({
-    query: '',
-    order: 'asc' as SortOrder,
+  withQueryParams({
+    query: (param) => param ?? '',
+    order: toSortOrder,
   }),
   withComputed(({ query, order }, albumsStore = inject(AlbumsStore)) => {
     const filteredAlbums = computed(() => {
@@ -34,13 +33,7 @@ export const AlbumSearchStore = signalStore(
       totalAlbums: computed(() => filteredAlbums().length),
     };
   }),
-  withMethods((store, snackBar = inject(MatSnackBar)) => ({
-    updateQuery(query: string): void {
-      patchState(store, { query });
-    },
-    updateOrder(order: SortOrder): void {
-      patchState(store, { order });
-    },
+  withMethods((_, snackBar = inject(MatSnackBar)) => ({
     notifyOnError: rxMethod<string | null>(
       pipe(
         filter(Boolean),
