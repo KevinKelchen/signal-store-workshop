@@ -1,6 +1,6 @@
 import { computed, inject } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { exhaustMap, pipe, tap } from 'rxjs';
+import { exhaustMap, filter, pipe, tap } from 'rxjs';
 import {
   patchState,
   signalStore,
@@ -14,6 +14,7 @@ import { tapResponse } from '@ngrx/operators';
 import { SortOrder } from '@/shared/models/sort-order.model';
 import { Album, searchAlbums, sortAlbums } from '@/albums/album.model';
 import { AlbumsService } from '@/albums/albums.service';
+import { setPending, withRequestStatus, setError, setFulfilled } from "../../shared/state/request-status.feature";
 
 export const AlbumSearchStore = signalStore(
   withState({
@@ -22,7 +23,8 @@ export const AlbumSearchStore = signalStore(
     query: '',
     order: 'asc' as SortOrder,
   }),
-  withComputed(({ albums, query, order, showProgress }) => {
+  withRequestStatus(),
+  withComputed(({ albums, query, order, showProgress, isPending }) => {
     const filteredAlbums = computed(() => {
       const searchedAlbums = searchAlbums(albums(), query());
 
@@ -31,6 +33,7 @@ export const AlbumSearchStore = signalStore(
 
     return {
       filteredAlbums,
+      showProgress: isPending,
       showSpinner: computed(() => showProgress() && albums().length === 0),
       totalAlbums: computed(() => filteredAlbums().length),
     };
@@ -49,20 +52,26 @@ export const AlbumSearchStore = signalStore(
       },
       loadAllAlbums: rxMethod<void>(
         pipe(
-          tap(() => patchState(store, { showProgress: true })),
+          tap(() => patchState(store, setPending())),
           exhaustMap(() => {
             return albumsService.getAll().pipe(
               tapResponse({
                 next: (albums) => {
-                  patchState(store, { albums, showProgress: false });
+                  patchState(store, { albums }, setFulfilled());
                 },
                 error: (error: { message: string }) => {
                   snackBar.open(error.message, 'Close', { duration: 5_000 });
-                  patchState(store, { showProgress: false });
+                  patchState(store, setError(error.message));
                 },
               }),
             );
           }),
+        ),
+      ),
+      notifyOnError: rxMethod<string | null>(
+        pipe(
+          filter(Boolean),
+          tap((error) => snackBar.open(error, 'Close', { duration: 5_000 })),
         ),
       ),
     }),
