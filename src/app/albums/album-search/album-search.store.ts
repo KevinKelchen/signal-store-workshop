@@ -21,31 +21,31 @@ import {
 } from '@/shared/state/request-status.feature';
 import { Album, searchAlbums, sortAlbums } from '@/albums/album.model';
 import { AlbumsService } from '@/albums/albums.service';
+import { AlbumsStore } from "../albums.store";
 
 export const AlbumSearchStore = signalStore(
-  withEntities<Album>(),
   withState({
     query: '',
     order: 'asc' as SortOrder,
   }),
-  withRequestStatus(),
-  withComputed(({ entities, query, order, isPending }) => {
+  withComputed(({ query, order }, albumsStore = inject(AlbumsStore)) => {
     const filteredAlbums = computed(() => {
-      const searchedAlbums = searchAlbums(entities(), query());
+      const searchedAlbums = searchAlbums(albumsStore.entities(), query());
       return sortAlbums(searchedAlbums, order());
     });
 
     return {
       filteredAlbums,
-      showProgress: isPending,
-      showSpinner: computed(() => isPending() && entities().length === 0),
+      showProgress: albumsStore.isPending,
+      showSpinner: computed(
+        () => albumsStore.isPending() && albumsStore.entities().length === 0,
+      ),
       totalAlbums: computed(() => filteredAlbums().length),
     };
   }),
   withMethods(
     (
       store,
-      albumsService = inject(AlbumsService),
       snackBar = inject(MatSnackBar),
     ) => ({
       updateQuery(query: string): void {
@@ -54,23 +54,6 @@ export const AlbumSearchStore = signalStore(
       updateOrder(order: SortOrder): void {
         patchState(store, { order });
       },
-      loadAllAlbums: rxMethod<void>(
-        pipe(
-          tap(() => patchState(store, setPending())),
-          exhaustMap(() => {
-            return albumsService.getAll().pipe(
-              tapResponse({
-                next: (albums) => {
-                  patchState(store, setAllEntities(albums), setFulfilled());
-                },
-                error: (error: { message: string }) => {
-                  patchState(store, setError(error.message));
-                },
-              }),
-            );
-          }),
-        ),
-      ),
       notifyOnError: rxMethod<string | null>(
         pipe(
           filter(Boolean),
@@ -80,9 +63,9 @@ export const AlbumSearchStore = signalStore(
     }),
   ),
   withHooks({
-    onInit(store) {
-      store.loadAllAlbums();
-      store.notifyOnError(store.error);
+    onInit({ notifyOnError }, albumsStore = inject(AlbumsStore)) {
+      albumsStore.loadAllAlbums();
+      notifyOnError(albumsStore.error);
     },
   }),
 );
