@@ -1,4 +1,4 @@
-import { computed, inject } from '@angular/core';
+import { Signal, computed, inject } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { filter, pipe, tap } from 'rxjs';
 import {
@@ -10,22 +10,37 @@ import {
   withState,
 } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
-import { SortOrder } from '@/shared/models/sort-order.model';
+import { SortOrder, toSortOrder } from '@/shared/models/sort-order.model';
 import { searchAlbums, sortAlbums } from '@/albums/album.model';
 import { AlbumsStore } from '@/albums/albums.store';
+import { ActivatedRoute, Params, Router } from "@angular/router";
+import { toSignal } from "@angular/core/rxjs-interop";
+import { withQueryParams } from "../../shared/state/route/query-params.feature";
 
 export const AlbumSearchStore = signalStore(
-  withState({
-    query: '',
-    order: 'asc' as SortOrder,
+  // withState({
+  //   query: '', // Want to remove duplicate state b/c in route
+  //   order: 'asc' as SortOrder,
+  // }),
+  withQueryParams({
+    query: (param) => param ?? '',
+    order: toSortOrder,
   }),
   withComputed(({ query, order }, albumsStore = inject(AlbumsStore)) => {
+    // const route = inject(ActivatedRoute);
+    // const params = toSignal(route.queryParams, { initialValue: {} as Params });
+
+    // const query: Signal<string> = computed(() => params()['query'] ?? '');
+    // const order = computed(() => toSortOrder(params()['order']));
+
     const filteredAlbums = computed(() => {
       const searchedAlbums = searchAlbums(albumsStore.entities(), query());
       return sortAlbums(searchedAlbums, order());
     });
 
     return {
+      query,
+      order,
       filteredAlbums,
       showProgress: albumsStore.isPending,
       showSpinner: computed(
@@ -34,13 +49,13 @@ export const AlbumSearchStore = signalStore(
       totalAlbums: computed(() => filteredAlbums().length),
     };
   }),
-  withMethods((store, snackBar = inject(MatSnackBar)) => ({
-    updateQuery(query: string): void {
-      patchState(store, { query });
-    },
-    updateOrder(order: SortOrder): void {
-      patchState(store, { order });
-    },
+  withMethods((_, snackBar = inject(MatSnackBar), router = inject(Router)) => ({
+    // updateQuery(query: string): void {
+    //   router.navigate([], { queryParams: { query }, queryParamsHandling: 'merge' });
+    // },
+    // updateOrder(order: SortOrder): void {
+
+    // },
     notifyOnError: rxMethod<string | null>(
       pipe(
         filter(Boolean),
